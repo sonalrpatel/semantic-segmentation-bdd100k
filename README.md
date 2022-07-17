@@ -1,4 +1,4 @@
-# semantic_segmentation
+# Semantic Segmentation
 Semantic segmentation of road driving scenes
 
 # Reference

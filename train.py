@@ -213,7 +213,7 @@ def train(
         else:
             callback_fn = [ag, lrs, mc, tb, cv]
 
-        if validate == "using_val" and tensorboard_viz_use is True:
+        if validate_using == "using_val" and tensorboard_viz_use is True:
             # Tensorboard callback that displays a random sample with respective target and prediction
             tensorboard_viz = TensorBoardPrediction(
                 val_generator, val_generator.get_class_rgb_encoding(), log_dir=log_dir_k
@@ -221,11 +221,11 @@ def train(
             callback_fn = [lrs, mc, es, tb, cv, tensorboard_viz]
 
     # Train the model
-    if validate == "using_val":
+    if validate_using == "using_val":
         history = model.fit(train_generator, steps_per_epoch=train_generator.__len__(),
                             validation_data=val_generator, validation_steps=val_generator.__len__(),
                             epochs=epochs, callbacks=callback_fn, initial_epoch=initial_epoch)
-    elif validate == "using_train":
+    elif validate_using == "using_train":
         history = model.fit(train_generator, steps_per_epoch=train_generator.__len__(),
                             validation_split=0.2,
                             epochs=epochs, callbacks=callback_fn, initial_epoch=initial_epoch)
