@@ -10,3 +10,17 @@ https://towardsdatascience.com/keras-data-generators-and-how-to-use-them-b69129e
 https://github.com/mjkvaak/ImageDataAugmentor
 https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly
 https://towardsdatascience.com/implementing-custom-data-generators-in-keras-de56f013581c
+
+# Build model
+https://towardsdatascience.com/3-ways-to-create-a-machine-learning-model-with-keras-and-tensorflow-2-0-de09323af4d3
+# Resume checkpoint
+https://medium.com/swlh/saving-and-loading-of-keras-sequential-and-functional-models-73ce704561f4
+https://medium.com/swlh/saving-and-loading-of-keras-sequential-and-functional-models-b0092fff335
+https://stackoverflow.com/questions/45393429/keras-how-to-save-model-and-continue-training
+
+# References
+https://github.com/divamgupta/image-segmentation-keras/blob/dc830bbd76371aaedbf8cb997bdedca388c544c4/keras_segmentation/train.py
+https://github.com/davidtvs/Keras-LinkNet/blob/538ec6fcaf88bb9365508c891f632f4cd42da886/main.py
+https://github.com/Anshul12256/Image-Segmentation-on-CamVid-with-Variants-of-UNet
+https://www.kaggle.com/mukulkr/camvid-segmentation-using-unet
+https://www.kaggle.com/meaninglesslives/nested-unet-with-efficientnet-encoder

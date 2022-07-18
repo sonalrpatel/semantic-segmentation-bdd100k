@@ -1,28 +1,50 @@
-from tensorflow.keras.callbacks import LearningRateScheduler, TensorBoard, CSVLogger, ModelCheckpoint, EarlyStopping
+import random
+import tensorflow as tf
 from tensorflow.keras.models import load_model
 from tensorflow.keras.utils import plot_model
+from tensorflow.keras.callbacks import LearningRateScheduler, TensorBoard, CSVLogger, ModelCheckpoint, EarlyStopping
 
-from dataloader.dataloader import *
-from utils.utils_metric import MeanIoU
-from loss.loss import LossFunc
-from utils.learningrate import *
 from model.unet_adv import unet_adv
 from model.unet import *
 from model.pspnet import *
 from model.deeplabv3 import *
 from model.fpn import *
 
-
-# References
-# Build model
-# https://towardsdatascience.com/3-ways-to-create-a-machine-learning-model-with-keras-and-tensorflow-2-0-de09323af4d3
-# Resume checkpoint
-# https://medium.com/swlh/saving-and-loading-of-keras-sequential-and-functional-models-73ce704561f4
-# https://medium.com/swlh/saving-and-loading-of-keras-sequential-and-functional-models-b0092fff335
-# https://stackoverflow.com/questions/45393429/keras-how-to-save-model-and-continue-training
+from loss.loss import LossFunc
+from dataloader.dataloader import *
+from utils.utils_metric import MeanIoU
+from utils.learningrate import *
+from configs import *
 
 
-def printinfo(
+# =======================================================
+# Set a seed value
+# =======================================================
+seed_value = 121
+
+# =======================================================
+# 1. Set `PYTHONHASHSEED` environment variable at a fixed value
+# =======================================================
+os.environ['PYTHONHASHSEED'] = str(seed_value)
+
+# =======================================================
+# 2. Set `python` built-in pseudo-random generator at a fixed value
+# =======================================================
+random.seed(seed_value)
+
+# =======================================================
+# 3. Set `numpy` pseudo-random generator at a fixed value
+# =======================================================
+np.random.seed(seed_value)
+
+# =======================================================
+# 4. Set `tensorflow` pseudo-random generator at a fixed value
+# =======================================================
+tf.random.set_seed(seed_value)
+print(tf.__version__)
+
+
+def print_info(
         checkpoint_path,
         train_generator,
         val_generator,
@@ -44,38 +66,20 @@ def printinfo(
     print("\n")
 
 
-# Train function
-def train(
-        model_name=None,
-        images_path=None,
-        segs_path=None,
-        seg_ext=None,
-        val_images_path=None,
-        val_segs_path=None,
-        class_path=None,
-        image_size=None,
-        n_classes=None,
-        validate_using=None,  # using_train # using_val
-        verify_dataset=False,
-        epochs=5,
-        batch_size=16,
-        val_batch_size=8,
-        loss_type="default",
-        optimizer_name="adam",
-        callback_fn=None,
-        checkpoint_path=None,
-        encoder=None,
-        weights=None,
-        resume_checkpoint=False,
-        model_weights=None,
-        augment_schedule=False,
-        augmentation_mode=None,
-        steps_per_epoch=256,
-        tensorboard_viz_use=False
-):
-    """
-    Train the model
-    """
+# =======================================================
+# Train the model
+# =======================================================
+def _main():
+    # =======================================================
+    #   Be sure to modify classes_path before training so that it corresponds to your own dataset
+    # =======================================================
+    classes_path = PATH_CLASSES
+
+    # =======================================================
+    #   When weight_path = '', the weights of the entire model are not loaded
+    # =======================================================
+    weight_path = PATH_WEIGHT
+
 
     global initial_epoch, model, val_generator
     assert (n_classes is not None), "Please provide the n_classes"
@@ -171,7 +175,7 @@ def train(
                                )
 
     # Print information about the training
-    printinfo(checkpoint_path, train_generator, val_generator, initial_epoch)
+    print_info(checkpoint_path, train_generator, val_generator, initial_epoch)
 
     # Callbacks
     if callback_fn is None:
@@ -248,3 +252,7 @@ def train(
     plt.savefig(checkpoint_path + model_name + '_mean_iou.png')
 
     return model
+
+
+if __name__ == '__main__':
+    _main()
