@@ -1,26 +1,8 @@
-import os
-import cv2
-import random
-import skimage.io as io
-import numpy as np
-import tensorflow as tf
-from glob import glob
-from tqdm import tqdm
 from collections import OrderedDict
 from tensorflow import keras
-from tensorflow.keras.preprocessing.image import load_img, img_to_array
 
+import configs
 from utils.helpers import *
-from dataloader.augmentation import *
-
-AUGMENTATION_MODE = None
-
-
-# References:
-# https://github.com/divamgupta/image-segmentation-keras/blob/dc830bbd76371aaedbf8cb997bdedca388c544c4/keras_segmentation/data_utils/data_loader.py
-# https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly
-# https://www.kaggle.com/mukulkr/camvid-segmentation-using-unet
-# https://www.kaggle.com/meaninglesslives/nested-unet-with-efficientnet-encoder
 
 
 class DataLoaderError(Exception):
@@ -184,35 +166,19 @@ class DataGenerator(keras.utils.Sequence):
         ('truck', (0, 0, 70))
     ])
 
-    def __init__(self, images_path, segs_path, seg_ext, class_path, batch_size=16,
-                 shuffle=True, dim=(224, 224, 3), image_enhance=False,
-                 augment_schedule=False, augmentation_mode=None):
-        # Update global AUGMENTATION_MODE
-        global AUGMENTATION_MODE
-        if augment_schedule:
-            assert augmentation_mode is None, "Manual augmentation is not allowed when scheduling is set True"
-        else:
-            # Set the global augmentation mode
-            if augmentation_mode == "soft":
-                AUGMENTATION_MODE = AUGMENTATIONS_TRAIN_SOFT
-            if augmentation_mode == "hard":
-                AUGMENTATION_MODE = AUGMENTATIONS_TRAIN_HARD
-
-        # Read class labels
-        class_names, class_labels = get_class_info(class_path)
-
+    def __init__(self, images_path, segs_path, seg_ext, class_labels,
+                 batch_size=16, shuffle=True, dim=(224, 224, 3),
+                 aug_schedule=False, aug_mode=None):
+        # TODO: if aug_schedule and aug_mode is not None, raise warning
         # Initialization
         self.dim = dim
         self.pair = get_pairs_from_paths(images_path, segs_path, seg_ext)
         self.indexes = np.arange(len(self.pair))
-        self.class_names = class_names
         self.class_labels = class_labels
         self.batch_size = batch_size
         self.shuffle = shuffle
-        self.augment_schedule = augment_schedule
-        self.augmentation_mode = AUGMENTATION_MODE
-        self.image_enhance = image_enhance
-        self.on_epoch_end()
+        self.aug_schedule = aug_schedule
+        self.aug_mode = aug_mode
 
     def __len__(self):
         """Denotes the number of batches per epoch
@@ -244,9 +210,9 @@ class DataGenerator(keras.utils.Sequence):
         if self.shuffle:
             np.random.shuffle(self.indexes)
 
-        # Set augmentation as per scheduling on plateau
-        if self.augment_schedule:
-            self.augmentation_mode = AUGMENTATION_MODE
+        # Update aug_mode as per scheduling on plateau which is checked in callbacks
+        if self.aug_schedule:
+            self.aug_mode = configs.AUGMENTATION_MODE
 
     def __data_generation(self, list_IDs_temp):
         """Generates dataloader containing batch_size samples
@@ -264,8 +230,8 @@ class DataGenerator(keras.utils.Sequence):
             # org_h = cv2.hconcat([img, seg])
 
             # Augment the image, seg_mask
-            if self.augmentation_mode is not None:
-                augmented = self.augmentation_mode(image=img, mask=seg)
+            if self.aug_mode is not None:
+                augmented = self.aug_mode(image=img, mask=seg)
                 img = augmented['image']
                 seg = augmented['mask']
 
@@ -273,7 +239,7 @@ class DataGenerator(keras.utils.Sequence):
             # org_aug = cv2.vconcat([org_h, aug_h])
             # cv2.imshow("org_aug", org_aug / 255)
 
-            # Normalise the image and One hot encode the seg_mask
+            # Normalise the image and one hot encode the seg_mask
             img = img / 255.
             seg = one_hot_image(seg, self.class_labels)
 
@@ -289,149 +255,3 @@ class DataGenerator(keras.utils.Sequence):
             class color.
         """
         return self._color_encoding38.copy()
-
-    import numpy as np
-
-
-# AugmentationScheduleOnPlateau
-class AugmentationScheduleOnPlateau(keras.callbacks.Callback):
-    """
-    Schedule augmentation on Training plateau
-    Reference:
-        https://www.kaggle.com/c/inclusive-images-challenge/discussion/72450
-        https://keras.io/guides/writing_your_own_callbacks/
-
-    Schedule Augmentation when the val_mean_iou is at its max, i.e. it stops
-    increasing.
-    Arguments:
-      patience: Number of epochs to wait after max has been hit. Then after,
-      apply soft augmentation for few epochs, and hard augmentation.
-    """
-
-    def __init__(self, patience=7, min_delta=0.01, init_delay_epoch=10):
-        super(AugmentationScheduleOnPlateau, self).__init__()
-        # After max has been hit, The number of epochs to wait to apply soft aug
-        self.patience = patience
-        self.init_delay_epoch = init_delay_epoch
-        # The number of epoch it has waited when miou is no longer maximum
-        self.wait = 0
-        # Initialize the best as 0
-        self.best = 0
-        # Minimum increase compared to previous best
-        self.min_delta = min_delta
-        # Augmentation mode
-        self.augmentation_mode = AUGMENTATION_MODE
-
-    def get_augmodeno(self, key):
-        augmode_dict = {
-            None: 0,
-            AUGMENTATIONS_TRAIN_SOFT: 1,
-            AUGMENTATIONS_TRAIN_HARD: 2
-        }
-
-        return augmode_dict[key]
-
-    def on_epoch_end(self, epoch, logs=None):
-        epoch = epoch + 1
-        current = logs.get("val_mean_iou")
-
-        if epoch <= self.init_delay_epoch:
-            self.best = current
-        else:
-            if self.augmentation_mode != AUGMENTATIONS_TRAIN_HARD:
-                if np.greater(current, self.best + self.min_delta):
-                    self.best = current
-                    self.wait = 0
-                else:
-                    self.wait += 1
-
-        logs = logs or {}
-        logs['ag_mode'] = self.get_augmodeno(self.augmentation_mode)
-
-    def on_epoch_begin(self, epoch, logs=None):
-        global AUGMENTATION_MODE
-
-        if self.wait >= self.patience:
-            # reset wait to start counting again
-            self.wait = 0
-
-            if self.augmentation_mode is None:
-                print("\nSoft augmentation is applied")
-                self.augmentation_mode = AUGMENTATIONS_TRAIN_SOFT
-            elif self.augmentation_mode == AUGMENTATIONS_TRAIN_SOFT:
-                print("\nHard augmentation is applied")
-                self.augmentation_mode = AUGMENTATIONS_TRAIN_HARD
-            else:
-                pass
-
-            AUGMENTATION_MODE = self.augmentation_mode
-
-
-# LearningRatePlanner
-class LearningRatePlanner(keras.callbacks.Callback):
-    """
-    Schedule learning rate on Training plateau
-    Reference:
-        https://www.kaggle.com/c/inclusive-images-challenge/discussion/72450
-        https://keras.io/guides/writing_your_own_callbacks/
-    """
-
-    def __init__(self, init_lr=0.001, min_lr=0.0001, patience=5, factor=0.5, min_delta=0.01,
-                 init_delay_epoch=0, reset_on_aug_start=True):
-        super(LearningRatePlanner, self).__init__()
-
-        assert patience != 0, "Patience equals to zero is not allowed"
-
-        # Initialise
-        self.scheduled_lr = init_lr
-        self.min_lr = min_lr
-        self.min_lr_reached = False
-        self.min_delta = min_delta
-        self.factor = factor
-        self.patience = patience
-        self.wait = 0
-        self.best = 0
-        self.init_delay_epoch = init_delay_epoch
-        self.augmentation_mode = AUGMENTATION_MODE
-        self.reset_on_aug_start = reset_on_aug_start
-
-    def on_epoch_end(self, epoch, logs=None):
-        epoch = epoch + 1
-        current = logs.get("val_mean_iou")
-
-        if epoch <= self.init_delay_epoch:
-            self.best = current
-        else:
-            if self.min_lr_reached is False:
-                if np.greater(current, self.best + self.min_delta):
-                    self.best = current
-                    self.wait = 0
-                else:
-                    self.wait += 1
-
-        logs = logs or {}
-        logs['lr'] = tf.keras.backend.get_value(self.model.optimizer.lr)
-
-    def on_epoch_begin(self, epoch, logs=None):
-        epoch = epoch + 1
-
-        # When wait is more than patience
-        if self.wait >= self.patience:
-            self.wait = 0
-            if (self.scheduled_lr * self.factor) < self.min_lr:
-                self.scheduled_lr = self.min_lr
-                self.min_lr_reached = True
-            else:
-                self.scheduled_lr = self.scheduled_lr * self.factor
-
-        # Reset lr when AUGMENTATION_MODE changes
-        if self.augmentation_mode != AUGMENTATION_MODE and self.reset_on_aug_start is True:
-            self.wait = 0
-            self.scheduled_lr = 0.001
-            self.min_lr_reached = False
-
-        self.augmentation_mode = AUGMENTATION_MODE
-
-        # Set the lr value back to the optimizer before this epoch starts
-        tf.keras.backend.set_value(self.model.optimizer.lr, self.scheduled_lr)
-        print("\nEpoch %05d: Learning rate is %6.4f." % (epoch, self.scheduled_lr))

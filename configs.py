@@ -8,11 +8,11 @@
 
 # Model Options
 # Update the path & others as per training trials
-MODEL_NAME = "resnet34pt_unet"
-MODEL_ENCODER = "default"  # default, resnet34, resnet34cm, resnet50, resnet50ka
-MODEL_WEIGHTS = None  # None, imagenet
-MODEL_LOSS = "default"  # "ce_iou"
-MODEL_OPTIMIZER = "Adam"
+MODEL_NAME = 'resnet34pt_unet'
+MODEL_ENCODER = 'default'  # default, resnet34, resnet34cm, resnet50, resnet50ka
+MODEL_ENCODER_WEIGHTS = None  # None, imagenet
+MODEL_OPTIMIZER = 'Adam'
+MODEL_LOSS = 'default'  # ce_iou
 
 # IMAGE size
 IMAGE_SIZE = (192, 192, 3)
@@ -25,18 +25,16 @@ DIR_TRAIN_SEG = DIR_DATA + 'colormaps/train/'
 DIR_VAL_IMG = DIR_DATA + 'images/val/'
 DIR_VAL_SEG = DIR_DATA + 'colormaps/val/'
 PATH_CLASSES = DIR_DATA + 'class_dict.xlsx'
-PATH_WEIGHT = None
+PATH_WEIGHTS = None
 VERIFY_DATASET = False
 
 # LOG directory
-LOG_DIR = "logs/"
-LOG_DIR2 = "logs/"  # server link to store the checkpoint
-TRIAL_NO = 'trial_1'
+LOG_DIR = 'logs/'
+LOG_DIR2 = 'logs/'  # server link to store the checkpoint
+TRIAL_NO = 't1'
 
 # TRAIN options
-TRAIN_AUG = True
-TRAIN_AUG_SCHEDULE = False
-TRAIN_AUG_MODE = 'soft'  # 'hard'
+TRAIN_DATA_AUG = True
 TRAIN_FREEZE_BODY = True
 TRAIN_FREEZE_BATCH_SIZE = 32
 TRAIN_UNFREEZE_BATCH_SIZE = 16  # note that more GPU memory is required after unfreezing the body
@@ -51,14 +49,49 @@ TRAIN_FROM_CHECKPOINT = False
 TRAIN_TRANSFER = True
 
 # TEST options
-TEST_MODE = "mean_iou"  # mean_iou, predict
-TEST_BATCH_SIZE = 16
 TEST_DATA_AUG = False
+TEST_BATCH_SIZE = 16
+TEST_MODE = 'mean_iou'  # mean_iou, predict
 
 # VAL options
 VAL_DATA_AUG = False
 VAL_BATCH_SIZE = 16
-VAL_VALIDATION_USING = "TRAIN"  # note that when validation data does not exist, set it to TRAIN or None
+VAL_VALIDATION_USING = 'TRAIN'  # note that when validation data does not exist, set it to TRAIN or None
 VAL_VALIDATION_SPLIT = 0.2  # note that it will be used when VAL_VALIDATION_USING is TRAIN
 
-# PREDICT options
+# Augmentation options
+from albumentations import (
+    Compose, HorizontalFlip, CLAHE, HueSaturationValue, GridDropout, ColorJitter,
+    RandomBrightnessContrast, RandomGamma, OneOf, Rotate, RandomSunFlare, Cutout,
+    ToFloat, ShiftScaleRotate, GridDistortion, ElasticTransform, HueSaturationValue,
+    RGBShift, Blur, MotionBlur, MedianBlur, GaussNoise, CenterCrop,
+    IAAAdditiveGaussianNoise, GaussNoise, OpticalDistortion, RandomSizedCrop
+)
+
+AUGMENTATIONS_TRAIN_SOFT = Compose([
+    HorizontalFlip(p=0.5),
+    ShiftScaleRotate(rotate_limit=20, shift_limit=0.07, scale_limit=0.2, p=0.3),
+    OneOf([
+        RandomSizedCrop(min_max_height=(96, 160), height=IMAGE_SIZE[0], width=IMAGE_SIZE[1]),
+        Cutout(num_holes=4)
+    ], p=0.2)
+], p=1)
+
+AUGMENTATIONS_TRAIN_HARD = Compose([
+    HorizontalFlip(p=0.5),
+    ShiftScaleRotate(rotate_limit=40, shift_limit=0.1, scale_limit=0.4, p=0.5),
+    OneOf([
+        RandomSizedCrop(min_max_height=(96, 144), height=IMAGE_SIZE[0], width=IMAGE_SIZE[1]),
+        Cutout(num_holes=12),
+    ], p=0.5),
+    MotionBlur(p=0.4),
+    OneOf([
+        GridDropout(),
+        ElasticTransform(),
+        GridDistortion(),
+        OpticalDistortion(distort_limit=1, shift_limit=0.5)
+    ], p=0.2)
+], p=1)
+
+AUGMENTATION_SCHEDULE = False
+AUGMENTATION_MODE = None  # AUGMENTATIONS_TRAIN_SOFT, AUGMENTATIONS_TRAIN_HARD

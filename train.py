@@ -1,8 +1,10 @@
+import glob
 import random
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 from tensorflow.keras.utils import plot_model
-from tensorflow.keras.callbacks import LearningRateScheduler, TensorBoard, CSVLogger, ModelCheckpoint, EarlyStopping
+from tensorflow.keras.callbacks import LearningRateScheduler, TensorBoard, CSVLogger
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
 
 from model.unet_adv import unet_adv
 from model.unet import *
@@ -10,12 +12,11 @@ from model.pspnet import *
 from model.deeplabv3 import *
 from model.fpn import *
 
+import configs
 from loss.loss import LossFunc
 from dataloader.dataloader import *
 from utils.utils_metric import MeanIoU
-from utils.learningrate import *
-from configs import *
-
+from utils.callbacks import *
 
 # =======================================================
 # Set a seed value
@@ -71,48 +72,99 @@ def print_info(
 # =======================================================
 def _main():
     # =======================================================
+    #   The size of the input shape must be a multiple of 32
+    # =======================================================
+    image_shape = IMAGE_SIZE
+
+    # =======================================================
     #   Be sure to modify classes_path before training so that it corresponds to your own dataset
     # =======================================================
     classes_path = PATH_CLASSES
 
     # =======================================================
-    #   When weight_path = '', the weights of the entire model are not loaded
+    #   Model configurations
     # =======================================================
-    weight_path = PATH_WEIGHT
+    model_name = MODEL_NAME
+    encoder = MODEL_ENCODER
+    encoder_weights = MODEL_ENCODER_WEIGHTS
+    optimizer = MODEL_OPTIMIZER
+    loss_type = MODEL_LOSS
 
+    # =======================================================
+    #   When model_weights = '', the weights of the entire model are not loaded
+    # =======================================================
+    model_weights = PATH_WEIGHTS
 
-    global initial_epoch, model, val_generator
-    assert (n_classes is not None), "Please provide the n_classes"
-    assert (image_size is not None), "Please provide the image_size"
-    assert (model_name is not None), "Please provide the model name"
-    assert (optimizer_name is not None), "Please specify the optimizer"
+    # =======================================================
+    #   Training settings
+    # =======================================================
+    train_images_path = DIR_TRAIN_IMG
+    train_segs_path = DIR_TRAIN_SEG
+    seg_name_ext = ''
+    init_epoch = TRAIN_FREEZE_INIT_EPOCH
+    freeze_end_epoch = TRAIN_FREEZE_END_EPOCH
+    unfreeze_end_epoch = TRAIN_UNFREEZE_END_EPOCH
+    freeze_batch_size = TRAIN_FREEZE_BATCH_SIZE
+    unfreeze_batch_size = TRAIN_UNFREEZE_BATCH_SIZE
+    freeze_lr = TRAIN_FREEZE_LR
+    unfreeze_lr = TRAIN_UNFREEZE_LR
+    verify_dataset = VERIFY_DATASET
 
-    # Verify dataset
+    # =======================================================
+    #   Augmentation settings
+    # =======================================================
+    aug_schedule = AUGMENTATION_SCHEDULE
+    aug_mode = AUGMENTATION_MODE
+
+    # =======================================================
+    #   Validation settings
+    # =======================================================
+    val_images_path = DIR_VAL_IMG
+    val_segs_path = DIR_VAL_SEG
+    val_batch_size = VAL_BATCH_SIZE
+    val_using = VAL_VALIDATION_USING
+    val_split = VAL_VALIDATION_SPLIT
+
+    # =======================================================
+    #   Checkpoint settings
+    # =======================================================
+    log_dir = LOG_DIR
+    checkpoint_path = LOG_DIR2
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    if not os.path.exists(checkpoint_path):
+        os.mkdir(checkpoint_path)
+    checkpoint_resume = TRAIN_FROM_CHECKPOINT
+
+    # =======================================================
+    #   Get classes and details
+    # =======================================================
+    num_classes, class_names, class_labels = get_class_info(classes_path)
+
+    # =======================================================
+    #   Verify dataset
+    # =======================================================
     if verify_dataset:
         print("Verifying training dataset")
-        verified = verify_segmentation_dataset(images_path, segs_path, seg_ext, n_classes)
+        verified = verify_segmentation_dataset(train_images_path, train_segs_path, seg_name_ext, num_classes)
         assert verified
 
-        if validate_using == "val":
+        if val_using == "val":
             print("Verifying validation dataset")
-            verified = verify_segmentation_dataset(val_images_path, val_segs_path, seg_ext, n_classes)
+            verified = verify_segmentation_dataset(val_images_path, val_segs_path, seg_name_ext, num_classes)
             assert verified
 
-    # Create generators
-    train_generator = DataGenerator(images_path, segs_path, seg_ext, class_path, batch_size,
-                                    augment_schedule=augment_schedule, augmentation_mode=augmentation_mode,
-                                    dim=image_size, image_enhance=False)
+    # =======================================================
+    #   Initialize evaluation metric (accuracy - mean_iou)
+    # =======================================================
+    mean_iou = MeanIoU(num_classes)
 
-    if validate_using == "val":
-        val_generator = DataGenerator(val_images_path, val_segs_path, seg_ext, class_path, val_batch_size,
-                                      dim=image_size, image_enhance=False)
-
-    # Initialize accuracy metric - miou
-    miou_metric = MeanIoU(n_classes)
-
-    if not resume_checkpoint:
-        # Build model
-        model_cfg = (n_classes, image_size, encoder, weights, model_name)
+    # =======================================================
+    #   Build the model
+    # =======================================================
+    if not checkpoint_resume:
+        # TODO: clean up and optimise the model building part
+        model_cfg = (num_classes, image_shape, encoder, encoder_weights, model_name)
         if "unet_adv" in model_name:
             model = unet_adv(model_cfg)
         elif "unet" in model_name:
@@ -126,116 +178,106 @@ def _main():
         else:
             raise "model name is not provided"
 
-        # Model summary
+        # =======================================================
+        #   Model summary and Plot model
+        # =======================================================
         model.summary()
+        plot_model(model, to_file=checkpoint_path + 'model_plot.png', show_shapes=True, show_layer_names=True)
 
-        # Save model plot
-        if checkpoint_path is not None:
-            if not os.path.isdir(checkpoint_path):
-                os.mkdir(checkpoint_path)
-            plot_model(model, to_file=checkpoint_path + 'model_plot.png', show_shapes=True, show_layer_names=True)
-
-        # Loss function
-        losses = LossFunc(n_classes)
+        # =======================================================
+        #   Loss function
+        # =======================================================
+        loss_fn = LossFunc(num_classes)
 
         if loss_type == "iou":
-            loss_k = losses.iou_loss
+            loss = loss_fn.iou_loss
         elif loss_type == "dice":
-            loss_k = losses.dice_loss
-        elif loss_type == "ceiou":
-            loss_k = losses.CEIoU_loss
-        elif loss_type == "cedice":
-            loss_k = losses.CEDice_loss
+            loss = loss_fn.dice_loss
+        elif loss_type == "ce_iou":
+            loss = loss_fn.CEIoU_loss
+        elif loss_type == "ce_dice":
+            loss = loss_fn.CEDice_loss
         else:
-            loss_k = "categorical_crossentropy"
+            loss = "categorical_cross_entropy"
 
-        # Compile
-        model.compile(loss=loss_k,
-                      optimizer=optimizer_name,
-                      metrics=['accuracy', miou_metric.mean_iou])
+        # =======================================================
+        #   Model compile
+        # =======================================================
+        model.compile(loss=loss,
+                      optimizer=optimizer,
+                      metrics=['accuracy', mean_iou.mean_iou])
 
-        # Load weights
-        initial_epoch = 0
-        if model_weights is not None and len(model_weights) > 0:
+        # =======================================================
+        #   Load weights
+        # =======================================================
+        if model_weights is not None:
             print("Loading weights from ", model_weights)
             model.load_weights(model_weights)
 
-    # Resume checkpoint
-    if resume_checkpoint is True and checkpoint_path is not None:
+    # =======================================================
+    #   Load complete model from a checkpoint and Resume training
+    # =======================================================
+    if checkpoint_resume:
         # Find the latest checkpoint
         latest_checkpoint = sorted(glob.glob(checkpoint_path + "*.hdf5"))[-1]
 
-        # Load model from checkpoint_path
+        # Load complete model from latest_checkpoint
         if latest_checkpoint is not None:
-            initial_epoch = int(latest_checkpoint.split('.')[0][-4:-2])
+            init_epoch = int(latest_checkpoint.split('.')[0][-4:-2])
             print("Loading the complete model from latest checkpoint ", latest_checkpoint)
 
             model = load_model(latest_checkpoint,
-                               custom_objects={'mean_iou': miou_metric.mean_iou}
+                               custom_objects={'mean_iou': mean_iou.mean_iou}
                                )
 
-    # Print information about the training
-    print_info(checkpoint_path, train_generator, val_generator, initial_epoch)
+    # =======================================================
+    #   Callbacks
+    # =======================================================
+    filepath = checkpoint_path + 'ep{epoch:03d}-loss{loss:.3f}-val_loss{val_loss:.3f}.h5'
+    monitor = 'val_loss'
+    mode = 'min'
 
-    # Callbacks
-    if callback_fn is None:
-        filepath_k = checkpoint_path + model_name + "_{epoch:02d}.hdf5"
-        callback_fn = [ModelCheckpoint(filepath=filepath_k, save_weights_only=True, verbose=True)]
+    tb_logging = TensorBoard(log_dir)
+    csv_logger = CSVLogger(log_dir + "log.csv", append=True, separator=',')
+    reduce_lr = ExponentDecayScheduler(decay_rate=0.94, verbose=True)
+    checkpoint = ModelCheckpoint(filepath, monitor=monitor, mode=mode,
+                                 save_weights_only=True, save_best_only=True, period=10, verbose=True)
+    early_stopping = EarlyStopping(monitor=monitor, mode=mode, min_delta=0, patience=10, verbose=True)
+    loss_history = LossHistory(log_dir)
 
-    if callback_fn == "all":
-        filepath_k = checkpoint_path + model_name + "_{epoch:02d}-{val_mean_iou:.3f}.hdf5"
-        log_dir_k = checkpoint_path + "/logs/"
-        monitor_k = 'val_mean_iou'
-        mode_k = 'max'
+    callbacks = [tb_logging, csv_logger, checkpoint, reduce_lr, early_stopping, loss_history]
 
-        # Augmentation scheduling callback
-        ag = AugmentationScheduleOnPlateau(patience=7, init_delay_epoch=10)
+    if aug_schedule:
+        aug_change = AugmentationScheduleOnPlateau(patience=7, init_delay_epoch=10)
+        callbacks.append(aug_change)
 
-        # LearningRateScheduler
-        lrs = LearningRateScheduler(lr_const_exp_decay_, verbose=True)
+    # =======================================================
+    #   Create data generators
+    # =======================================================
+    train_generator = DataGenerator(train_images_path, train_segs_path, seg_name_ext, class_labels,
+                                    freeze_batch_size, dim=image_shape,
+                                    aug_schedule=aug_schedule, aug_mode=aug_mode)
 
-        # CustomLearningRateScheduler -> LearningRatePlanner
-        # lrs = LearningRatePlanner(init_lr=0.001, patience=5, factor=0.5, reset_on_aug_start=True)
+    if val_using == "VAL":
+        val_generator = DataGenerator(val_images_path, val_segs_path, seg_name_ext, class_labels,
+                                      val_batch_size, dim=image_shape)
 
-        # Reduce LR on Plateau
-        # lrs = ReduceLROnPlateau(mode=mode_k, monitor=monitor_k, factor=0.5, patience=5, verbose=True, min_lr=0.0001)
+    print_info(checkpoint_path, train_generator, val_generator, init_epoch)
 
-        # Checkpoint callback - save the best model
-        mc = ModelCheckpoint(mode=mode_k, filepath=filepath_k, monitor=monitor_k, save_best_only='True', verbose=True)
-
-        # Early stopping
-        es = EarlyStopping(mode=mode_k, monitor=monitor_k, min_delta=0.01, patience=20, verbose=True)
-
-        # TensorBoard callback
-        tb = TensorBoard(log_dir=log_dir_k, histogram_freq=0, write_graph=True, write_images=False)
-
-        # CSVLogger
-        cv = CSVLogger(log_dir_k + "log.csv", append=True, separator=',')
-
-        if not augment_schedule:
-            callback_fn = [lrs, mc, tb, cv]
-        else:
-            callback_fn = [ag, lrs, mc, tb, cv]
-
-        if validate_using == "using_val" and tensorboard_viz_use is True:
-            # Tensorboard callback that displays a random sample with respective target and prediction
-            tensorboard_viz = TensorBoardPrediction(
-                val_generator, val_generator.get_class_rgb_encoding(), log_dir=log_dir_k
-            )
-            callback_fn = [lrs, mc, es, tb, cv, tensorboard_viz]
-
-    # Train the model
-    if validate_using == "using_val":
+    # =======================================================
+    #   Train the model
+    # =======================================================
+    if val_using == "VAL":
         history = model.fit(train_generator, steps_per_epoch=train_generator.__len__(),
                             validation_data=val_generator, validation_steps=val_generator.__len__(),
-                            epochs=epochs, callbacks=callback_fn, initial_epoch=initial_epoch)
-    elif validate_using == "using_train":
+                            epochs=freeze_end_epoch, callbacks=callbacks, initial_epoch=init_epoch)
+    elif val_using == "TRAIN":
         history = model.fit(train_generator, steps_per_epoch=train_generator.__len__(),
                             validation_split=0.2,
-                            epochs=epochs, callbacks=callback_fn, initial_epoch=initial_epoch)
+                            epochs=freeze_end_epoch, callbacks=callbacks, initial_epoch=init_epoch)
     else:
         history = model.fit(train_generator, steps_per_epoch=train_generator.__len__(),
-                            epochs=epochs, callbacks=callback_fn, initial_epoch=initial_epoch)
+                            epochs=freeze_end_epoch, callbacks=callbacks, initial_epoch=init_epoch)
 
     # Plot result
     plt.title("loss")

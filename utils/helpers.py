@@ -2,10 +2,7 @@ import os
 import cv2
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import glob
 from tqdm import tqdm
-from pathlib import Path as path
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 
@@ -17,7 +14,7 @@ def get_class_info(class_path):
     Must be in CSV or XLXS format!
 
     # Arguments
-        class_path: The file path of the class dictionairy
+        class_path: The file path of the class dictionary
 
     # Returns
         Two lists: one for the class names and the other for the class label
@@ -43,10 +40,10 @@ def get_class_info(class_path):
             try:
                 class_labels.append(np.array([item['r'], item['g'], item['b']]))
             except:
-                print("Column names are not appropiate")
+                print("Column names are not appropriate")
                 break
 
-    return class_names, class_labels
+    return len(class_names), class_names, class_labels
 
 
 # Get labeled segmentation mask
@@ -85,9 +82,9 @@ def one_hot_image(seg, class_labels):
         A 3D array with the same width and height as the input, but
         with a depth size of num_classes
     """
-    num_classes = len(class_labels)                         # seg dim = H*W*3
-    label = label_segmentation_mask(seg, class_labels)      # label dim = H*W
-    one_hot = to_categorical(label, num_classes)            # one_hot dim = H*W*N
+    num_classes = len(class_labels)  # seg dim = H*W*3
+    label = label_segmentation_mask(seg, class_labels)  # label dim = H*W
+    one_hot = to_categorical(label, num_classes)  # one_hot dim = H*W*N
 
     return one_hot
 
@@ -108,7 +105,7 @@ def reverse_one_hot(image):
     """
     w = image.shape[0]
     h = image.shape[1]
-    x = np.zeros([w,h,1])
+    x = np.zeros([w, h, 1])
 
     for i in range(0, w):
         for j in range(0, h):
@@ -124,13 +121,13 @@ def make_prediction(model, img=None, img_path=None, shape=None):
     Predict the hot encoded categorical label from the image.
     Later, convert it numerical label.
     """
-    if img is not None:                         # dim = H*W*3
-        img = np.expand_dims(img, axis=0)       # dim = 1*H*W*3
+    if img is not None:  # dim = H*W*3
+        img = np.expand_dims(img, axis=0)  # dim = 1*H*W*3
     if img_path is not None:
         img = img_to_array(load_img(img_path, target_size=shape)) / 255.
-        img = np.expand_dims(img, axis=0)       # dim = 1*H*W*3
-    label = model.predict(img)                  # dim = 1*H*W*N
-    label = np.argmax(label[0], axis=2)         # dim = H*W
+        img = np.expand_dims(img, axis=0)  # dim = 1*H*W*3
+    label = model.predict(img)  # dim = 1*H*W*N
+    label = np.argmax(label[0], axis=2)  # dim = H*W
 
     return label
 
@@ -139,7 +136,7 @@ def form_color_mask(label, mapping):
     """
     Generate the color mask from the numerical label
     """
-    h, w = label.shape                          # dim = H*W
+    h, w = label.shape  # dim = H*W
     mask = np.zeros((h, w, 3), dtype=np.uint8)  # dim = H*W*3
     mask = mapping[label]
     mask = mask.astype(np.uint8)
@@ -185,7 +182,6 @@ def count_unique_pixels(seg_path):
         num_unique_pixels.append(len(unq_cls_list))
 
     return num_unique_pixels
-
 
 # primary_path = "C:/Users/sonal/Google Drive/10_Python/1_0_Datasets/bdd100k/seg"
 # seg_path_train = path(primary_path + "/color_labels/train_")
