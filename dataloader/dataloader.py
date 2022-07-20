@@ -171,13 +171,13 @@ class DataGenerator(keras.utils.Sequence):
         ('truck', (0, 0, 70))
     ])
 
-    def __init__(self, images_path, segs_path, seg_ext, class_labels,
+    def __init__(self, img_seg_pairs, class_labels,
                  batch_size=16, shuffle=True, dim=(224, 224, 3),
                  aug_schedule=False, aug_mode=None):
         # TODO: if aug_schedule and aug_mode is not None, raise warning
         # Initialization
         self.dim = dim
-        self.pair = get_pairs_from_paths(images_path, segs_path, seg_ext)
+        self.pair = img_seg_pairs
         self.indexes = np.arange(len(self.pair))
         self.class_labels = class_labels
         self.batch_size = batch_size

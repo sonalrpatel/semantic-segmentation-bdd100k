@@ -1,11 +1,9 @@
+import numpy as np
 import tensorflow as tf
 import keras.backend as K
-import numpy as np
 from math import ceil
-from sys import exit
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import *
-from tensorflow.image import ResizeMethod
 
 from tensorflow.keras.applications import ResNet50
 from classification_models.keras import Classifiers
@@ -21,8 +19,7 @@ from model.model_utils import *
 
 def SpatialPoolingBlock(inputs, pool_factor, n_filters=512, pooling_type='avg', batch_norm=True):
     if pooling_type not in ('max', 'avg'):
-        raise ValueError('Unsupported pooling type - `{}`.'.format(pooling_type) +
-                         'Use `avg` or `max`.')
+        raise ValueError('Unsupported pooling type - `{}`.'.format(pooling_type) + 'Use `avg` or `max`.')
 
     Pooling2D = MaxPooling2D if pooling_type == 'max' else AveragePooling2D
 
@@ -46,7 +43,7 @@ def SpatialPoolingBlock(inputs, pool_factor, n_filters=512, pooling_type='avg', 
     # Upsampled / Resized to restore the same size as input size using bilinear interpolation
     # x = UpSampling2D(up_size, interpolation='bilinear', name=upsampling_name)(x)
     # x = Lambda(lambda x: tf.image.resize(x, spatial_size))(x)
-    x = tf.image.resize(x, spatial_size, method=ResizeMethod.BILINEAR, name=upsampling_name)
+    x = tf.image.resize(x, spatial_size, name=upsampling_name)
 
     return x
 
@@ -69,8 +66,8 @@ def SpatialPyramidPooling(res, conv_filters=None):
 
 
 # PSPNet Decoder
-def _build_pspnet(n_classes, image_size=(192, 192, 3), encoder=None, weights=None, name=None):
-    inputs = input_tensor(image_size)
+def _build_pspnet(n_classes, input_shape=(192, 192, 3), encoder=None, weights=None, name=None):
+    inputs = input_tensor(input_shape)
     if encoder is "resnet34":
         # f0-inputs - 192 x 192 x 3     -   1/1
         # f1-skip   -  96 x  96 x 64    -   1/2
@@ -121,7 +118,7 @@ def _build_pspnet(n_classes, image_size=(192, 192, 3), encoder=None, weights=Non
 
     # model head
     x = Conv2D(n_classes, kernel_size=1, kernel_initializer=KERNEL_INIT)(x)
-    x = tf.image.resize(x, image_size[0:2], name="final_upsampling")
+    x = tf.image.resize(x, input_shape[0:2], name="final_upsampling")
     # x = Conv2DTranspose(n_classes, kernel_size=(16, 16), strides=(8, 8), padding='same')(x)
     outputs = Activation('softmax')(x)
 
@@ -133,7 +130,7 @@ def _build_pspnet(n_classes, image_size=(192, 192, 3), encoder=None, weights=Non
 
 
 def pspnet(model_cfg):
-    (n_classes, image_size, encoder, weights, model_name) = model_cfg
-    model = _build_pspnet(n_classes, image_size, encoder, weights, model_name)
+    (n_classes, image_size, encoder, weights, name) = model_cfg
+    model = _build_pspnet(n_classes, input_shape=image_size, encoder=encoder, weights=weights, name=name)
 
     return model

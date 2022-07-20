@@ -1,11 +1,9 @@
+import numpy as np
 import tensorflow as tf
 import keras.backend as K
-import numpy as np
 from math import ceil
-from sys import exit
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import *
-from tensorflow.image import ResizeMethod
 
 from tensorflow.keras.applications import ResNet50
 from classification_models.keras import Classifiers
@@ -53,7 +51,7 @@ def AtrousSpatialPyramidPooling(res, conv_filters=None):
                 name='image_pooling')(b4)
     b4 = BatchNormalization(name='image_pooling_bn', epsilon=1e-5)(b4)
     b4 = Activation('relu')(b4)
-    b4 = tf.image.resize(b4, res.shape[1:3], method=ResizeMethod.BILINEAR, name='image_pooling_upsampling')
+    b4 = tf.image.resize(b4, res.shape[1:3], name='image_pooling_upsampling')
 
     # aggregate atrous spatial pyramids
     aspp = Concatenate(name='aspp_concat')([b4, b0, b1, b2, b3])
@@ -62,8 +60,8 @@ def AtrousSpatialPyramidPooling(res, conv_filters=None):
 
 
 # Deeplabv3 Decoder
-def _build_deeplabv3(n_classes, image_size=(224, 224, 3), encoder=None, weights=None, name=None):
-    inputs = input_tensor(image_size)
+def _build_deeplabv3(n_classes, input_shape=(224, 224, 3), encoder=None, weights=None, name=None):
+    inputs = input_tensor(input_shape)
     if encoder is "resnet34":
         # f0-inputs - 192 x 192 x 3     -   1/1
         # f1-skip   -  96 x  96 x 64    -   1/2
@@ -114,7 +112,7 @@ def _build_deeplabv3(n_classes, image_size=(224, 224, 3), encoder=None, weights=
 
     # model head
     x = Conv2D(n_classes, kernel_size=1, kernel_initializer=KERNEL_INIT)(x)
-    x = tf.image.resize(x, image_size[0:2], name="final_upsampling")
+    x = tf.image.resize(x, input_shape[0:2], name="final_upsampling")
     # x = Conv2DTranspose(n_classes, kernel_size=(16, 16), strides=(8, 8), padding='same')(x)
     outputs = Activation('softmax')(x)
 
@@ -126,7 +124,7 @@ def _build_deeplabv3(n_classes, image_size=(224, 224, 3), encoder=None, weights=
 
 
 def deeplabv3(model_cfg):
-    (n_classes, image_size, encoder, weights, model_name) = model_cfg
-    model = _build_deeplabv3(n_classes, image_size, encoder, weights, model_name)
+    (n_classes, image_size, encoder, weights, name) = model_cfg
+    model = _build_deeplabv3(n_classes, input_shape=image_size, encoder=encoder, weights=weights, name=name)
 
     return model

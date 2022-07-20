@@ -1,8 +1,7 @@
+import numpy as np
 import tensorflow as tf
 import keras.backend as K
-import numpy as np
 from math import ceil
-from sys import exit
 from tensorflow.keras.models import Model
 
 from tensorflow.keras.applications import ResNet50
@@ -72,10 +71,10 @@ def FPNBlock(pyramid_filters, stage):
 
 
 # FPN Decoder
-def _build_fpn(n_classes, image_size=(192, 192, 3), encoder=None,
+def _build_fpn(n_classes, input_shape=(192, 192, 3), encoder=None,
                pyramid_filters=256, segmentation_filters=128,
                aggregation='concat', dropout=None,  weights=None, name=None):
-    inputs = input_tensor(image_size)
+    inputs = input_tensor(input_shape)
     if encoder is "resnet34":
         # f0-inputs - 192 x 192 x 3     -   1/1
         # f1-skip   -  96 x  96 x 64    -   1/2
@@ -161,6 +160,6 @@ def _build_fpn(n_classes, image_size=(192, 192, 3), encoder=None,
 
 def fpn(model_cfg):
     (n_classes, image_size, encoder, weights, name) = model_cfg
-    model = _build_fpn(n_classes, image_size=image_size, encoder=encoder, weights=weights, name=name)
+    model = _build_fpn(n_classes, input_shape=image_size, encoder=encoder, weights=weights, name=name)
 
     return model

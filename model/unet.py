@@ -1,3 +1,7 @@
+import numpy as np
+import tensorflow as tf
+import keras.backend as K
+from math import ceil
 from tensorflow.keras.models import Model
 
 from tensorflow.keras.applications import ResNet50
@@ -38,8 +42,8 @@ def _build_vanilla_unet(n_classes, input_shape=(192, 192, 3), filters=64, name=N
 
 
 # UNet Decoder
-def _build_unet(n_classes, image_size=(192, 192, 3), encoder=None, weights=None, name=None):
-    inputs = input_tensor(image_size)
+def _build_unet(n_classes, input_shape=(192, 192, 3), encoder=None, weights=None, name=None):
+    inputs = input_tensor(input_shape)
     if encoder is "resnet34":
         # f0-inputs - 192 x 192 x 3     -   1/1
         # f1-skip   -  96 x  96 x 64    -   1/2
@@ -80,11 +84,11 @@ def _build_unet(n_classes, image_size=(192, 192, 3), encoder=None, weights=None,
 
     skip = [f1, f2, f3, f4]
     bridge = f5
-    #                                                                           ResNet50    ResNet34
-    d1 = decoder_block(bridge, skip[3], n_filters=skip[3].shape[-1])    # filters   1024    256
-    d2 = decoder_block(d1, skip[2], n_filters=skip[2].shape[-1])        # filters   512     128
-    d3 = decoder_block(d2, skip[1], n_filters=skip[1].shape[-1])        # filters   256     64
-    d4 = decoder_block(d3, skip[0], n_filters=skip[0].shape[-1])        # filters   64      64
+    #                                                                               ResNet50    ResNet34
+    d1 = decoder_block(bridge, skip[3], n_filters=skip[3].shape[-1])    # filters   1024        256
+    d2 = decoder_block(d1, skip[2], n_filters=skip[2].shape[-1])        # filters   512         128
+    d3 = decoder_block(d2, skip[1], n_filters=skip[1].shape[-1])        # filters   256         64
+    d4 = decoder_block(d3, skip[0], n_filters=skip[0].shape[-1])        # filters   64          64
 
     x = Conv2DTranspose(filters=n_classes,
                         kernel_size=(3, 3),
@@ -108,6 +112,6 @@ def unet(model_cfg):
     if encoder is "default":
         model = _build_vanilla_unet(n_classes, input_shape=image_size, name=name)
     else:
-        model = _build_unet(n_classes, image_size=image_size, encoder=encoder, weights=weights, name=name)
+        model = _build_unet(n_classes, input_shape=image_size, encoder=encoder, weights=weights, name=name)
 
     return model

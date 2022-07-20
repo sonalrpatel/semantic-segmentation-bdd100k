@@ -3,10 +3,9 @@ import random
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 from tensorflow.keras.utils import plot_model
-from tensorflow.keras.callbacks import LearningRateScheduler, TensorBoard, CSVLogger
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
+from tensorflow.keras.callbacks import LearningRateScheduler, ReduceLROnPlateau, TensorBoard
+from tensorflow.keras.callbacks import ModelCheckpoint, CSVLogger, EarlyStopping
 
-from model.unet_adv import unet_adv
 from model.unet import *
 from model.pspnet import *
 from model.deeplabv3 import *
@@ -45,28 +44,6 @@ tf.random.set_seed(seed_value)
 print(tf.__version__)
 
 
-def print_info(
-        checkpoint_path,
-        train_generator,
-        val_generator,
-        initial_epoch
-):
-    """
-    Print information about model training
-    """
-    image_batch, label_batch = train_generator[0]
-    num_classes = label_batch[0].shape[-1]
-    print("\n")
-    print("--> Model under trail: {}".format(checkpoint_path.split('/')[-2]))
-    print("--> Starting with initial_epoch: {}".format(initial_epoch))
-    print("--> Training batches: {}".format(len(train_generator)))
-    print("--> Validation batches: {}".format(len(val_generator)))
-    print("--> Image size: {}".format(image_batch.shape))
-    print("--> Label size: {}".format(label_batch.shape))
-    print("--> No. of classes: {}".format(num_classes))
-    print("\n")
-
-
 # =======================================================
 # Train the model
 # =======================================================
@@ -74,7 +51,7 @@ def _main():
     # =======================================================
     #   The size of the input shape must be a multiple of 32
     # =======================================================
-    image_shape = IMAGE_SIZE
+    image_size = IMAGE_SIZE
 
     # =======================================================
     #   Be sure to modify classes_path before training so that it corresponds to your own dataset
@@ -96,6 +73,12 @@ def _main():
     model_weights = PATH_WEIGHTS
 
     # =======================================================
+    #   Augmentation settings
+    # =======================================================
+    aug_schedule = AUGMENTATION_SCHEDULE
+    aug_mode = AUGMENTATION_MODE
+
+    # =======================================================
     #   Training settings
     # =======================================================
     train_images_path = DIR_TRAIN_IMG
@@ -109,12 +92,6 @@ def _main():
     freeze_lr = TRAIN_FREEZE_LR
     unfreeze_lr = TRAIN_UNFREEZE_LR
     verify_dataset = VERIFY_DATASET
-
-    # =======================================================
-    #   Augmentation settings
-    # =======================================================
-    aug_schedule = AUGMENTATION_SCHEDULE
-    aug_mode = AUGMENTATION_MODE
 
     # =======================================================
     #   Validation settings
@@ -164,10 +141,8 @@ def _main():
     # =======================================================
     if not checkpoint_resume:
         # TODO: clean up and optimise the model building part
-        model_cfg = (num_classes, image_shape, encoder, encoder_weights, model_name)
-        if "unet_adv" in model_name:
-            model = unet_adv(model_cfg)
-        elif "unet" in model_name:
+        model_cfg = (num_classes, image_size, encoder, encoder_weights, model_name)
+        if "unet" in model_name:
             model = unet(model_cfg)
         elif "pspnet" in model_name:
             model = pspnet(model_cfg)
@@ -176,7 +151,7 @@ def _main():
         elif "fpn" in model_name:
             model = fpn(model_cfg)
         else:
-            raise "model name is not provided"
+            raise "Model name is not provided"
 
         # =======================================================
         #   Model summary and Plot model
@@ -253,34 +228,41 @@ def _main():
         callbacks_all.append(aug_change)
 
     # =======================================================
+    #   Annotation pairs
+    # =======================================================
+    train_pairs = get_pairs_from_paths(train_images_path, train_segs_path, seg_name_ext)
+    if val_using == "VAL":
+        val_pairs = get_pairs_from_paths(val_images_path, val_segs_path, seg_name_ext)
+    if val_using == "TRAIN":
+        val_pairs = random.sample(train_pairs, int(len(train_pairs) * val_split))
+        train_pairs = [line for line in train_pairs if line not in val_pairs]
+
+    # =======================================================
     #   Create data generators
     # =======================================================
-    train_generator = DataGenerator(train_images_path, train_segs_path, seg_name_ext, class_labels,
-                                    freeze_batch_size, dim=image_shape,
+    train_generator = DataGenerator(train_pairs, class_labels, freeze_batch_size, dim=image_size,
                                     aug_schedule=aug_schedule, aug_mode=aug_mode)
 
-    if val_using == "VAL":
-        val_generator = DataGenerator(val_images_path, val_segs_path, seg_name_ext, class_labels,
-                                      val_batch_size, dim=image_shape)
-
-    # print_info(checkpoint_path, train_generator, val_generator, init_epoch)
+    if val_using == "VAL" or val_using == "TRAIN":
+        val_generator = DataGenerator(val_pairs, class_labels, val_batch_size, dim=image_size)
 
     # =======================================================
     #   Train the model
     # =======================================================
-    if val_using == "VAL":
+    if val_using == "VAL" or val_using == "TRAIN":
+        print("Training with {} train samples and validating with {} val samples from {}."
+              .format(len(train_pairs), len(val_pairs), val_using))
         history = model.fit(train_generator, steps_per_epoch=train_generator.__len__(),
                             validation_data=val_generator, validation_steps=val_generator.__len__(),
                             epochs=freeze_end_epoch, callbacks=callbacks_all, initial_epoch=init_epoch)
-    elif val_using == "TRAIN":
-        history = model.fit(train_generator, steps_per_epoch=train_generator.__len__(),
-                            validation_split=0.2,
-                            epochs=freeze_end_epoch, callbacks=callbacks_all, initial_epoch=init_epoch)
     else:
+        print("Training with {} train samples without validation.".format(len(train_pairs)))
         history = model.fit(train_generator, steps_per_epoch=train_generator.__len__(),
                             epochs=freeze_end_epoch, callbacks=callbacks_all, initial_epoch=init_epoch)
 
-    # Plot result
+    # =======================================================
+    #   Plot result
+    # =======================================================
     plt.title("loss")
     plt.plot(history.history["loss"], color="r", label="train")
     plt.plot(history.history["val_loss"], color="b", label="val")
