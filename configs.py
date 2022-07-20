@@ -19,8 +19,8 @@
 #   resnet50ka      imagenet    --  resnet50 encoder from keras_applications with pretrained weights on imagenet
 # ================================================================
 MODEL_NAME = 'unet'  # unet, pspnet, deeplabv3, fpn
-MODEL_ENCODER = 'default'
-MODEL_ENCODER_WEIGHTS = 'None'
+MODEL_ENCODER = 'resnet34cm'
+MODEL_ENCODER_WEIGHTS = 'imagenet'
 MODEL_OPTIMIZER = 'Adam'
 MODEL_LOSS = 'default'  # ce_iou
 
@@ -58,16 +58,16 @@ TRAIN_SAVE_CHECKPOINT = False  # saves all best validated checkpoints in trainin
 TRAIN_FROM_CHECKPOINT = False
 TRAIN_TRANSFER = True
 
-# TEST options
-TEST_DATA_AUG = False
-TEST_BATCH_SIZE = 16
-TEST_MODE = 'mean_iou'  # mean_iou, predict
-
 # VAL options
 VAL_DATA_AUG = False
 VAL_BATCH_SIZE = 16
 VAL_VALIDATION_USING = 'TRAIN'  # note that when validation data does not exist, set it to TRAIN or None
 VAL_VALIDATION_SPLIT = 0.2  # note that it will be used when VAL_VALIDATION_USING is TRAIN
+
+# TEST options
+TEST_DATA_AUG = False
+TEST_BATCH_SIZE = 16
+TEST_MODE = 'mean_iou'  # mean_iou, predict
 
 # Augmentation options
 from albumentations import (

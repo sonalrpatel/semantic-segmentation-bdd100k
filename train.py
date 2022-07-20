@@ -238,6 +238,9 @@ def _main():
         val_pairs = random.sample(train_pairs, int(len(train_pairs) * val_split))
         train_pairs = [line for line in train_pairs if line not in val_pairs]
 
+    if len(train_pairs) < freeze_batch_size or (len(val_pairs) < val_batch_size and val_using is not None):
+        raise ValueError('The dataset is too small for training')
+
     # =======================================================
     #   Create data generators
     # =======================================================
