@@ -41,7 +41,7 @@ class MeanIoU(object):
     """
 
     def __init__(self, n_classes, mean_per_class=False, conf_matrix=False, calc_method=2):
-        super(self, MeanIoU).__init__()
+        super(MeanIoU, self).__init__()
         assert (mean_per_class & conf_matrix) is False, 'Both mean_per_class and conf_matrix can not be true together'
 
         self.num_classes = n_classes

@@ -104,10 +104,10 @@ def _build_unet(n_classes, image_size=(192, 192, 3), encoder=None, weights=None,
 
 
 def unet(model_cfg):
-    (n_classes, image_size, encoder, weights, model_name) = model_cfg
+    (n_classes, image_size, encoder, weights, name) = model_cfg
     if encoder is "default":
-        model = _build_vanilla_unet(n_classes, image_size, model_name)
+        model = _build_vanilla_unet(n_classes, input_shape=image_size, name=name)
     else:
-        model = _build_unet(n_classes, image_size, encoder, weights, model_name)
+        model = _build_unet(n_classes, image_size=image_size, encoder=encoder, weights=weights, name=name)
 
     return model

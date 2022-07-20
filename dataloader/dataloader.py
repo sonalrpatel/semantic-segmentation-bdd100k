@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from tensorflow import keras
+from pathlib import Path
 
 import configs
 from utils.helpers import *
@@ -10,11 +11,14 @@ class DataLoaderError(Exception):
 
 
 # Prepare pairs
-def get_pairs_from_paths(
-        images_path, segs_path, seg_ext
-):
-    """ Find all the images from the images_path directory and the segmentation images 
-        from the segs_path directory while checking integrity of dataloader """
+def get_pairs_from_paths(images_path, segs_path, seg_ext):
+    """""
+    Find all the images from the images_path directory and 
+    the segmentation images from the segs_path directory 
+    while checking integrity of dataloader
+    """""
+    images_path = Path(images_path)
+    segs_path = Path(segs_path)
 
     ACCEPTABLE_IMAGE_FORMATS = [".jpg", ".jpeg", ".png", ".bmp"]
     ACCEPTABLE_SEGMENTATION_FORMATS = [".png", ".bmp"]
@@ -39,20 +43,19 @@ def get_pairs_from_paths(
         assert segs_path / (img.stem + seg_ext + ".png") in segs, "{img} not there in segmentation folder"
         img_seg_pairs.append((img, segs_path / (img.stem + seg_ext + ".png")))
 
-        # if len(img_seg_pairs) > 100:
-        #     break
-
     return img_seg_pairs  # (image and segmentation) pairs
 
 
 # Verify dataset
-def verify_segmentation_dataset(
-        images_path, segs_path, seg_ext, n_classes, check_details=False, show_all_errors=False
-):
+def verify_segmentation_dataset(images_path, segs_path, seg_ext, n_classes,
+                                check_details=False, show_all_errors=False):
+    """""
+    Verify dataset
+    """""
     try:
         img_seg_pairs = get_pairs_from_paths(images_path, segs_path, seg_ext)
         if not len(img_seg_pairs):
-            print("Couldn't load any dataloader from images_path: {0} and segmentations path: {1}"
+            print("Could not load any dataloader from images_path: {0} and segmentations path: {1}"
                   .format(images_path, segs_path))
             return False
 
@@ -90,9 +93,11 @@ def verify_segmentation_dataset(
 
 
 # Visualize dataset
-def visualize_segmentation_dataset(
-        images_path, segs_path, seg_ext, do_augment=False,
-        image_size=None, augment_name="aug_all", custom_aug=None):
+def visualize_segmentation_dataset(images_path, segs_path, seg_ext, do_augment=False,
+                                   image_size=None, augment_name="aug_all", custom_aug=None):
+    """""
+    Visualize dataset
+    """""
     try:
         # Get image-segmentation pairs
         img_seg_pairs = get_pairs_from_paths(images_path, segs_path, seg_ext)
@@ -119,12 +124,12 @@ def visualize_segmentation_dataset(
 
 # Custom dataloader generator
 class DataGenerator(keras.utils.Sequence):
-    """
+    """""
     Generates dataloader for Keras
     Reference:
         https://github.com/bdd100k/bdd100k/blob/a093762959e22ab4ed178b455897a801b96cc908/bdd100k/label/label.py
         https://www.kaggle.com/solesensei/solesensei_bdd100k
-    """
+    """""
     _color_encoding38 = OrderedDict([
         ('unlabeled-egovehicle-static', (0, 0, 0)),
         ('dynamic', (111, 74, 0)),

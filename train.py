@@ -182,7 +182,8 @@ def _main():
         #   Model summary and Plot model
         # =======================================================
         model.summary()
-        plot_model(model, to_file=checkpoint_path + 'model_plot.png', show_shapes=True, show_layer_names=True)
+        plot_model(model, to_file=checkpoint_path + str(model_name) + '_model_plot.png',
+                   show_shapes=True, show_layer_names=True)
 
         # =======================================================
         #   Loss function
@@ -198,7 +199,7 @@ def _main():
         elif loss_type == "ce_dice":
             loss = loss_fn.CEDice_loss
         else:
-            loss = "categorical_cross_entropy"
+            loss = "categorical_crossentropy"
 
         # =======================================================
         #   Model compile
@@ -245,11 +246,11 @@ def _main():
     early_stopping = EarlyStopping(monitor=monitor, mode=mode, min_delta=0, patience=10, verbose=True)
     loss_history = LossHistory(log_dir)
 
-    callbacks = [tb_logging, csv_logger, checkpoint, reduce_lr, early_stopping, loss_history]
+    callbacks_all = [tb_logging, csv_logger, checkpoint, reduce_lr, early_stopping, loss_history]
 
     if aug_schedule:
         aug_change = AugmentationScheduleOnPlateau(patience=7, init_delay_epoch=10)
-        callbacks.append(aug_change)
+        callbacks_all.append(aug_change)
 
     # =======================================================
     #   Create data generators
@@ -262,7 +263,7 @@ def _main():
         val_generator = DataGenerator(val_images_path, val_segs_path, seg_name_ext, class_labels,
                                       val_batch_size, dim=image_shape)
 
-    print_info(checkpoint_path, train_generator, val_generator, init_epoch)
+    # print_info(checkpoint_path, train_generator, val_generator, init_epoch)
 
     # =======================================================
     #   Train the model
@@ -270,14 +271,14 @@ def _main():
     if val_using == "VAL":
         history = model.fit(train_generator, steps_per_epoch=train_generator.__len__(),
                             validation_data=val_generator, validation_steps=val_generator.__len__(),
-                            epochs=freeze_end_epoch, callbacks=callbacks, initial_epoch=init_epoch)
+                            epochs=freeze_end_epoch, callbacks=callbacks_all, initial_epoch=init_epoch)
     elif val_using == "TRAIN":
         history = model.fit(train_generator, steps_per_epoch=train_generator.__len__(),
                             validation_split=0.2,
-                            epochs=freeze_end_epoch, callbacks=callbacks, initial_epoch=init_epoch)
+                            epochs=freeze_end_epoch, callbacks=callbacks_all, initial_epoch=init_epoch)
     else:
         history = model.fit(train_generator, steps_per_epoch=train_generator.__len__(),
-                            epochs=freeze_end_epoch, callbacks=callbacks, initial_epoch=init_epoch)
+                            epochs=freeze_end_epoch, callbacks=callbacks_all, initial_epoch=init_epoch)
 
     # Plot result
     plt.title("loss")
