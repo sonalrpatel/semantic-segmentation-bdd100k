@@ -6,11 +6,21 @@
 #   Description : configuration file
 # ================================================================
 
-# Model Options
-# Update the path & others as per training trials
-MODEL_NAME = 'resnet34pt_unet'
-MODEL_ENCODER = 'default'  # default, resnet34, resnet34cm, resnet50, resnet50ka
-MODEL_ENCODER_WEIGHTS = None  # None, imagenet
+# ================================================================
+#   Possible encoder and weights combinations
+# ----------------------------------------------------------------
+#   Encoder         Weights
+# ----------------------------------------------------------------
+#   default         None        --  only for vanilla_unet
+#   resnet34/50     None        --  resnet34/50 encoder (self configured) w/o any pretrained weights
+#   resnet34cm      None        --  resnet34 encoder from classification_models w/o any pretrained weights
+#   resnet50ka      None        --  resnet50 encoder from keras_applications w/o any pretrained weights
+#   resnet34cm      imagenet    --  resnet34 encoder from classification_models with pretrained weights on imagenet
+#   resnet50ka      imagenet    --  resnet50 encoder from keras_applications with pretrained weights on imagenet
+# ================================================================
+MODEL_NAME = 'unet'  # unet, pspnet, deeplabv3, fpn
+MODEL_ENCODER = 'default'
+MODEL_ENCODER_WEIGHTS = 'None'
 MODEL_OPTIMIZER = 'Adam'
 MODEL_LOSS = 'default'  # ce_iou
 
